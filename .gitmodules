@@ -1,0 +1,3 @@
+[submodule "librealsense-l515"]
+	path = librealsense-l515
+	url = https://github.com/QuantumNovice/librealsense-l515.git

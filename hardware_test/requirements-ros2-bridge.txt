@@ -1,0 +1,4 @@
+# Extra pip packages for the system ROS2 image bridge shell.
+# rclpy and sensor_msgs must come from /opt/ros/humble, not pip.
+pyzmq>=25
+numpy>=1.23

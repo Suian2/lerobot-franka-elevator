@@ -1,0 +1,29 @@
+charuco:
+  dictionary: DICT_5X5_100
+  squares_x: 7
+  squares_y: 5
+  square_length_m: 0.035
+  marker_length_m: 0.026
+  legacy_pattern: false
+
+capture_validation:
+  min_charuco_corners: 12
+  warning_reprojection_error_px: 1.0
+  max_reprojection_error_px: 2.0
+  min_laplacian_variance: 100.0
+
+robot_stillness:
+  window_s: 1.0
+  max_translation_m: 0.001
+  max_rotation_deg: 0.5
+
+pose_similarity:
+  translation_m: 0.010
+  rotation_deg: 5.0
+
+validation:
+  target_scatter_translation_m: 0.005
+  target_scatter_rotation_deg: 2.0
+  leave_one_out_translation_m: 0.010
+  leave_one_out_rotation_deg: 3.0
+  robust_mad_multiplier: 3.5
