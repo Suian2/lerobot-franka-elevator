@@ -4,17 +4,12 @@
 
 当前有效基线：
 
-- 只按一个固定电梯按钮
-
-- 不使用楼层条件和 environment\_state
-
-- L515 通过 RealSense SDK 直接读取
-
-- 使用 unconditioned ACT
-
-- HTTP负责状态、夹爪、回零和故障恢复
-
-- ZMQ负责高频末端速度命令
+* 只按一个固定电梯按钮
+* 不使用楼层条件和 environment\_state
+* L515 通过 RealSense SDK 直接读取
+* 使用 unconditioned ACT
+* HTTP负责状态、夹爪、回零和故障恢复
+* ZMQ负责高频末端速度命令
 
 
 
@@ -54,6 +49,7 @@ HTTP GET /ctl/gripper\_state
 (负责：将状态、动作和索引写入Parquet；将RGB图像编码成MP4；更新episode元数据；更新数据集统计信息；管理文件和chunk编号。)
 
 ## 阶段二输出：LeRobotDataset
+
 dataset\_root/
 ├── data/*.parquet
 ├── videos/observation.images.l515/*.mp4
@@ -91,11 +87,11 @@ episodes/*.parquet：保存每个episode的范围和文件位置。
 6. processor\_act.py：训练前后处理
 （输入预处理和输出后处理；负责增加batch维、放入GPU、归一化和动作反归一化。）
 7. optim/factory.py
-(根据ACT训练配置创建：AdamW优化器；学习率调度器。用于更新ACT模型参数。)
-8. lerobot\_train.py 中的训练循环
-(每个训练step执行：DataLoader读取batch→ 图像转换为float32→ processor归一化→ ACTPolicy.forward()→ 计算L1和KL损失→ backward()→ 梯度裁剪→ optimizer.step()→ 学习率更新)
-9. train\_utils.py
-（保存和恢复checkpoint，包括模型权重、训练配置、优化器和processor状态。）
+（根据ACT训练配置创建AdamW优化器；当前ACT默认不配置学习率调度器。）
+8. lerobot\_train.py中的训练循环
+（每个训练step执行：DataLoader读取batch→图像转换为float32→processor归一化→ACTPolicy.forward()→计算L1和KL损失→backward()→梯度裁剪→optimizer.step()。仅在配置scheduler时更新学习率，当前ACT默认无scheduler。）
+9. common/train\_utils.py
+（`save_checkpoint()`保存policy权重、训练配置、processor和训练状态；`load_training_state()`恢复训练步数、随机数状态、优化器及可选scheduler。）
 
 ## 阶段三输出：ACT checkpoint
 checkpoint/
@@ -107,7 +103,7 @@ checkpoint/
 │   └── policy\_postprocessor.json
 └── training\_state/
 ├── optimizer\_state.safetensors
-├── scheduler\_state.json
+├── scheduler\_state.json（仅配置scheduler时生成；当前ACT默认不生成）
 ├── rng\_state.safetensors
 └── training\_step.json
 Rollout主要使用 pretrained\_model，不需要优化器状态。
@@ -122,7 +118,7 @@ run\_act\_rollout\_realsense\_unconditioned.py
 （从checkpoint的 config.json 恢复：ACT类型；输入输出特征；动作块长度；ResNet和Transformer结构；VAE和归一化配置。
 无条件rollout还会检查：checkpoint必须是ACT；不能包含楼层条件；状态必须是8维；图像必须是3×540×960；动作必须是7维。）
 3. modeling\_act.py
-（定义ACTPolicy的网络及推理逻辑，根据图像和机器人状态预测动作块；模型权重由policies/pretrained.py中的from_pretrained()加载。）
+（定义ACTPolicy的网络及推理逻辑，根据图像和机器人状态预测动作块；模型权重由policies/pretrained.py中的from\_pretrained()加载。）
 4. policies/pretrained.py
 （从checkpoint的：model.safetensors 加载ACT模型权重，并恢复到 ACTPolicy。）
 5. policies/factory.py
@@ -149,33 +145,22 @@ ACT推理由modeling\_act.py中的ACTPolicy完成。）
 
 ## 运行结束、回零与故障恢复
 
-- rollout正常结束或发生异常时，通过finally发送零笛卡尔速度。
-
-- 断开相机、状态缓存和ZMQ连接。
-
-- go\_home.py：机械臂回到预设关节Home位置。
-
-- recover\_fault.py：清除机械臂故障并恢复控制状态。
-
-- maintenance\_cli.py：状态检查、故障恢复和维护操作入口。
+* rollout正常结束或发生异常时，通过finally发送零笛卡尔速度。
+* 断开相机、状态缓存和ZMQ连接。
+* go\_home.py：机械臂回到预设关节Home位置。
+* recover\_fault.py：清除机械臂故障并恢复控制状态。
+* maintenance\_cli.py：状态检查、故障恢复和维护操作入口。
 
 
 
 ## 暂不进入当前单按钮主流程
 
-- 多楼层条件编码
-
-- 旧数据增加 target\_floor
-
-- 多楼层数据合并与验证
-
-- run\_act\_rollout\_realsense.py
-
-- ROS2 图像桥接方案
-
-- YOLO按钮识别
-
-- 手眼标定
-
-- UI及远程采集替代入口
+* 多楼层条件编码
+* 旧数据增加 target\_floor
+* 多楼层数据合并与验证
+* run\_act\_rollout\_realsense.py
+* ROS2 图像桥接方案
+* YOLO按钮识别
+* 手眼标定
+* UI及远程采集替代入口
 
