@@ -1,5 +1,5 @@
 # Extra packages for the LeRobot/conda recorder and teleop process.
-# Install inside the LeRobot environment. Do not source ROS2 in this shell.
+# Install inside the LeRobot environment.
 pyzmq>=25
 requests>=2.31
 pynput>=1.7
