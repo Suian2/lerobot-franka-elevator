@@ -138,26 +138,18 @@ PYTHONPATH=src /home/yanrihong/miniconda3/envs/lerobot/bin/python \
   --camera-backend none
 ```
 
-Start the ROS2 image bridge in a system ROS2 shell:
-
-```bash
-source /opt/ros/humble/setup.bash
-python3 hardware_test/cameras/ros2_image_bridge.py \
-  --topic /l515/color/image_raw \
-  --endpoint tcp://127.0.0.1:5557
-```
-
-Record one 10 second L515 RGB episode in the LeRobot/conda shell:
+Record one 10 second L515 RGB episode with the direct RealSense backend:
 
 ```bash
 PYTHONPATH=src python \
-  hardware_test/franka/run_record_lerobot.py \
+  hardware_test/franka/run_record.py \
   --repo-id local/franka_l515_smoke \
   --root outputs/hardware_test/franka_l515_smoke \
   --task "Franka SpaceMouse teleoperation" \
   --duration-s 10 \
   --num-episodes 1 \
-  --image-zmq tcp://127.0.0.1:5557 \
+  --camera-backend realsense \
+  --camera-serial-or-name "Intel RealSense L515" \
   --streaming-encoding \
   --encoder-threads 2
 ```
@@ -217,19 +209,19 @@ choose a new root for each UI session.
 The default recording profile is tuned for low-stutter collection:
 
 - collection/control loop: `30 Hz`
-- ROS2 raw L515 color topic bridged to latest-only ZMQ
+- L515 RGB frames read directly through the RealSense SDK
 - color profile metadata: `960x540@30Hz`, RGB uint8
 - stale camera guard: latest-frame reads fail if frames are too old
 
-Keep the ROS2 bridge and LeRobot recorder in separate shells. Do not source ROS2
-setup files in the conda recorder shell, and do not activate the LeRobot conda
-environment in the ROS2 bridge shell.
+The default camera backend reads the L515 directly through the RealSense SDK:
 
-The legacy OpenCV backend is still available only as an explicit opt-in with
-`--camera-backend opencv`; it is not used by the ROS2+ZMQ path. The direct
-RealSense backend is also available with
-`--camera-backend realsense --camera-serial-or-name <serial>`, but that requires
-`pyrealsense2` in the active Python environment.
+```text
+--camera-backend realsense --camera-serial-or-name <serial-or-name>
+```
+
+This requires `pyrealsense2` in the active Python environment. The legacy
+OpenCV backend remains available only as an explicit opt-in with
+`--camera-backend opencv`.
 
 These modules are not wired into `lerobot-record` CLI automatically. Use them
 from a local script, or import this package before constructing configs manually.
