@@ -125,7 +125,7 @@ def validate_policy_features(config: Any) -> None:
     if OBS_ENV_STATE in config.input_features:
         raise ValueError(
             f"conditioned checkpoint includes {OBS_ENV_STATE}; "
-            "use run_act_rollout_realsense.py with --target-floor"
+            "this single-button rollout requires an unconditioned checkpoint"
         )
 
     expected_inputs = {

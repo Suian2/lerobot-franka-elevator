@@ -30,7 +30,7 @@ def _parser_cases() -> tuple[ParserCase, ...]:
         (run_teleop.build_arg_parser, []),
         (collect_eye_to_hand.build_arg_parser, []),
     )
-    module_name = "hardware_test.franka.run_act_rollout_realsense"
+    module_name = "hardware_test.franka.run_act_rollout_realsense_unconditioned"
     if importlib.util.find_spec(module_name) is None:
         return cases
     rollout_realsense = importlib.import_module(module_name)
@@ -38,7 +38,7 @@ def _parser_cases() -> tuple[ParserCase, ...]:
         *cases,
         (
             rollout_realsense.build_arg_parser,
-            ["--policy-path", "policy", "--target-floor", "1"],
+            ["--policy-path", "policy"],
         ),
     )
 
