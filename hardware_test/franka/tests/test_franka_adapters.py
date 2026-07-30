@@ -37,7 +37,6 @@ from hardware_test.franka.record_lerobot_dataset import (
 from hardware_test.franka.run_record import (
     build_arg_parser,
     build_camera_configs,
-    build_cameras,
     build_robot_config,
     build_teleop_config,
     main as run_record_main,
@@ -746,7 +745,6 @@ def test_run_remote_record_defaults_to_requested_smoke_profile():
     assert args.duration_s == 10.0
     assert args.num_episodes == 1
     assert args.control_host == DEFAULT_CONTROL_HOST
-    assert args.image_zmq == "tcp://127.0.0.1:5557"
     assert args.streaming_encoding is True
     assert args.encoder_threads == 2
     assert args.max_state_age_s == 1.0
@@ -1337,7 +1335,7 @@ def test_legacy_run_record_and_ui_parsers_do_not_advertise_target_floor():
             parser.parse_args(["--target-floor", "4"])
 
 
-def test_run_record_defaults_to_direct_realsense_camera_backend_without_ros2_zmq():
+def test_run_record_defaults_to_direct_realsense_camera_backend():
     args = build_arg_parser().parse_args([])
 
     camera_configs, camera_shapes = build_camera_configs(args)
@@ -1474,32 +1472,6 @@ def test_run_record_builds_realsense_camera_and_robot_config_from_args():
     assert teleop_config.pose_scaler == (0.05 / 15.0, 0.40 / 15.0)
 
 
-def test_run_record_builds_zmq_image_client_from_args():
-    args = build_arg_parser().parse_args(
-        [
-            "--camera-backend",
-            "ros2_zmq",
-            "--image-zmq",
-            "tcp://127.0.0.1:6001",
-            "--camera-width",
-            "424",
-            "--camera-height",
-            "240",
-            "--max-camera-age-s",
-            "0.12",
-        ]
-    )
-
-    cameras = build_cameras(args)
-
-    assert sorted(cameras) == ["l515"]
-    assert cameras["l515"].endpoint == "tcp://127.0.0.1:6001"
-    assert cameras["l515"].max_age_ms == 120
-
-
-def test_run_record_rejects_legacy_direct_ros2_camera_backend():
-    with pytest.raises(SystemExit):
-        build_arg_parser().parse_args(["--camera-backend", "ros2"])
 
 
 DELTA_EE_ACTION_KEYS = [

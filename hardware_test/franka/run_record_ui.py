@@ -33,7 +33,6 @@ from hardware_test.franka.record_lerobot_dataset import (  # noqa: E402
 )
 from hardware_test.franka.run_record import (  # noqa: E402
     build_arg_parser,
-    build_cameras,
     build_robot_config,
     build_teleop_config,
     describe_config,
@@ -78,7 +77,7 @@ def _validate_ui_args(parser: argparse.ArgumentParser, args: argparse.Namespace)
 
 
 def _build_runtime(args: argparse.Namespace) -> UiRuntime:
-    robot = FrankaRobot(build_robot_config(args), cameras=build_cameras(args))
+    robot = FrankaRobot(build_robot_config(args))
     teleop = FrankaSpaceMouseTeleop(build_teleop_config(args))
 
     def dataset_factory(spec: DatasetSpec):

@@ -16,7 +16,7 @@ if SRC_ROOT.exists() and str(SRC_ROOT) not in sys.path:
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from hardware_test.cameras.ros2_image_bridge import DEFAULT_IMAGE_ZMQ_ENDPOINT  # noqa: E402
+
 from hardware_test.franka.defaults import get_control_host  # noqa: E402
 from hardware_test.franka.floor_condition import encode_target_floor  # noqa: E402
 from hardware_test.franka.franka_robot import FrankaRobot, FrankaRobotConfig  # noqa: E402
@@ -69,10 +69,9 @@ def build_arg_parser(*, require_target_floor: bool = False) -> argparse.Argument
     parser.add_argument("--max-camera-age-s", type=float, default=0.25)
 
     parser.add_argument(
-        "--camera-backend", choices=("realsense", "ros2_zmq", "opencv", "none"), default="realsense"
+        "--camera-backend", choices=("realsense", "opencv", "none"), default="realsense"
     )
     parser.add_argument("--camera-name", default="l515")
-    parser.add_argument("--image-zmq", default=DEFAULT_IMAGE_ZMQ_ENDPOINT)
     parser.add_argument("--camera-serial-or-name", default="Intel RealSense L515")
     parser.add_argument("--camera-width", type=int, default=L515_COLOR_WIDTH)
     parser.add_argument("--camera-height", type=int, default=L515_COLOR_HEIGHT)
@@ -103,11 +102,8 @@ def build_arg_parser(*, require_target_floor: bool = False) -> argparse.Argument
 
 
 def build_camera_configs(args: argparse.Namespace):
-    if args.camera_backend in {"none", "ros2_zmq"}:
-        camera_shapes = {}
-        if args.camera_backend == "ros2_zmq":
-            camera_shapes = {args.camera_name: (args.camera_height, args.camera_width, 3)}
-        return {}, camera_shapes
+    if args.camera_backend == "none":
+        return {}, {}
     if args.camera_backend == "opencv":
         from lerobot.cameras.opencv import OpenCVCameraConfig
 
@@ -201,17 +197,6 @@ def _video_device_sort_key(path: Path):
     return int(suffix) if suffix.isdigit() else 10_000
 
 
-def build_cameras(args: argparse.Namespace):
-    if args.camera_backend == "ros2_zmq":
-        from hardware_test.cameras.ros2_image_bridge import ZmqRgbImageClient
-
-        return {
-            args.camera_name: ZmqRgbImageClient(
-                args.image_zmq,
-                max_age_ms=max(1, int(args.max_camera_age_s * 1000)),
-            )
-        }
-    return None
 
 
 def build_robot_config(args: argparse.Namespace) -> FrankaRobotConfig:
@@ -285,8 +270,6 @@ def _describe_cameras(args: argparse.Namespace, robot_config: FrankaRobotConfig)
         camera_config = robot_config.cameras.get(name)
         if camera_config is not None and hasattr(camera_config, "index_or_path"):
             source = str(camera_config.index_or_path)
-        elif args.camera_backend == "ros2_zmq":
-            source = args.image_zmq
         camera_parts.append(f"{name}={width}x{height}x{channels}@{args.camera_fps}Hz:{source}")
     return ", ".join(camera_parts)
 
@@ -305,7 +288,7 @@ def main(argv: list[str] | None = None, *, require_target_floor: bool = False) -
     stop_event = Event()
     install_signal_handlers(stop_event)
 
-    robot = FrankaRobot(robot_config, cameras=build_cameras(args))
+    robot = FrankaRobot(robot_config)
     teleop = FrankaSpaceMouseTeleop(teleop_config)
     dataset = None
 
