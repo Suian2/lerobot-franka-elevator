@@ -30,7 +30,7 @@
 
 
 
-多楼层、ROS2图像桥接、YOLO和手眼标定不属于当前主线。
+多楼层、YOLO和手眼标定不属于当前主线。ROS2图像桥接代码已从当前开发分支删除。
 
 
 
@@ -661,8 +661,6 @@ episode录制完成后，由`run_record.py`调用`dataset.save_episode()`；
 - `migrate_add_target_floor.py`
 
 - `validate_multifloor_dataset.py`
-
-- `ros2_l515_camera.py`
 
 - `run_record_ui.py`
 

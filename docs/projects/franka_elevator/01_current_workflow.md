@@ -159,7 +159,6 @@ ACT推理由modeling\_act.py中的ACTPolicy完成。）
 * 旧数据增加 target\_floor
 * 多楼层数据合并与验证
 * run\_act\_rollout\_realsense.py
-* ROS2 图像桥接方案
 * YOLO按钮识别
 * 手眼标定
 * UI及远程采集替代入口
