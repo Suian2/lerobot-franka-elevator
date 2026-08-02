@@ -626,27 +626,7 @@ episode录制完成后，由`run_record.py`调用`dataset.save_episode()`；
 
 
 
-## 10. 兼容模块
-
-
-
-### `hardware_test/franka/franka_zmq_http_robot.py`
-
-
-
-作用：
-
-
-
-- 兼容旧导入路径
-
-- 重新导出`franka_robot.py`中的配置和类
-
-- 不包含第二套独立的Franka控制逻辑
-
-
-
-## 11. 当前非主线模块
+## 10. 当前非主线模块
 
 
 
