@@ -18,7 +18,6 @@ if str(REPO_ROOT) not in sys.path:
 
 
 from hardware_test.franka.defaults import get_control_host  # noqa: E402
-from hardware_test.franka.floor_condition import encode_target_floor  # noqa: E402
 from hardware_test.franka.franka_robot import FrankaRobot, FrankaRobotConfig  # noqa: E402
 from hardware_test.franka.franka_spacemouse_teleop import (  # noqa: E402
     FrankaSpaceMouseTeleop,
@@ -38,7 +37,7 @@ L515_COLOR_PROFILES = ((960, 540), (1280, 720), (1920, 1080))
 L515_VIDEO0_GREY_PROFILES = ((480, 640), (768, 1024), (240, 320))
 
 
-def build_arg_parser(*, require_target_floor: bool = False) -> argparse.ArgumentParser:
+def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Record Franka + L515 SpaceMouse demos as LeRobotDataset.")
 
     parser.add_argument("--repo-id", default="local/franka_l515_smoke")
@@ -48,8 +47,6 @@ def build_arg_parser(*, require_target_floor: bool = False) -> argparse.Argument
     parser.add_argument("--duration-s", type=float, default=10.0)
     parser.add_argument("--num-episodes", type=int, default=1)
     parser.add_argument("--reset-time-s", type=float, default=0.0)
-    if require_target_floor:
-        parser.add_argument("--target-floor", type=int, choices=range(1, 6), required=True)
 
     parser.add_argument("--control-host", default=get_control_host())
     parser.add_argument("--base-url", default=None)
@@ -249,13 +246,10 @@ def install_signal_handlers(stop_event: Event) -> None:
 
 def describe_config(args: argparse.Namespace, robot_config: FrankaRobotConfig) -> str:
     cameras = _describe_cameras(args, robot_config)
-    target_floor = getattr(args, "target_floor", None)
-    target_floor_config = f" target_floor={target_floor}" if target_floor is not None else ""
     return (
         f"repo_id={args.repo_id} root={args.root} fps={args.fps} episodes={args.num_episodes} "
         f"duration_s={args.duration_s} control_host={args.control_host} "
         f"velocity_transport={args.velocity_transport} camera_backend={args.camera_backend} cameras={cameras}"
-        f"{target_floor_config}"
     )
 
 
@@ -274,9 +268,8 @@ def _describe_cameras(args: argparse.Namespace, robot_config: FrankaRobotConfig)
     return ", ".join(camera_parts)
 
 
-def main(argv: list[str] | None = None, *, require_target_floor: bool = False) -> int:
-    args = build_arg_parser(require_target_floor=require_target_floor).parse_args(argv)
-    target_floor = getattr(args, "target_floor", None)
+def main(argv: list[str] | None = None) -> int:
+    args = build_arg_parser().parse_args(argv)
     robot_config = build_robot_config(args)
     teleop_config = build_teleop_config(args)
 
@@ -309,13 +302,11 @@ def main(argv: list[str] | None = None, *, require_target_floor: bool = False) -
             streaming_encoding=args.streaming_encoding,
             encoder_queue_maxsize=args.encoder_queue_maxsize,
             encoder_threads=args.encoder_threads,
-            include_environment_state=target_floor is not None,
         )
 
         for episode_idx in range(args.num_episodes):
             if stop_event.is_set():
                 break
-            environment_state = encode_target_floor(target_floor) if target_floor is not None else None
             print(f"episode {episode_idx}: recording", flush=True)
             try:
                 frames = record_lerobot_episode(
@@ -329,8 +320,6 @@ def main(argv: list[str] | None = None, *, require_target_floor: bool = False) -
                     max_consecutive_state_misses=args.state_max_consecutive_misses,
                     max_state_wait_s=args.max_state_wait_s,
                     state_retry_sleep_s=args.state_retry_sleep_s,
-                    environment_state=environment_state,
-                    tolerate_robot_faults=target_floor is not None and args.action_mode == "delta_ee_pose",
                 )
                 if frames == 0:
                     dataset.clear_episode_buffer(delete_images=True)

@@ -10,7 +10,6 @@ from typing import Any, Protocol
 
 import numpy as np
 
-from hardware_test.franka.floor_condition import FLOOR_CONDITION_FEATURE, FLOOR_CONDITION_KEY
 from hardware_test.franka.franka_robot import FrankaControlError
 from hardware_test.franka.state_cache import StaleFrankaStateError
 from lerobot.types import RobotAction, RobotObservation
@@ -101,7 +100,6 @@ def build_lerobot_features(
     teleop: Any | None = None,
     *,
     use_videos: bool = True,
-    include_environment_state: bool = False,
 ) -> dict[str, dict]:
     """Build LeRobotDataset features from the local Franka robot and teleop adapters."""
 
@@ -110,8 +108,6 @@ def build_lerobot_features(
         hw_to_dataset_features(action_features, ACTION, use_video=use_videos),
         hw_to_dataset_features(robot.observation_features, OBS_STR, use_video=use_videos),
     )
-    if include_environment_state:
-        features[FLOOR_CONDITION_KEY] = FLOOR_CONDITION_FEATURE.copy()
     return features
 
 
@@ -121,45 +117,14 @@ def make_lerobot_frame(
     action: RobotAction,
     *,
     task: str,
-    environment_state: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """Pack one synchronized observation/action pair for LeRobotDataset.add_frame()."""
 
-    is_conditioned = _validate_environment_state(features, environment_state)
-
-    dataset_features = {key: feature for key, feature in features.items() if key != FLOOR_CONDITION_KEY}
-    observation_frame = build_dataset_frame(dataset_features, observation, prefix=OBS_STR)
-    action_frame = build_dataset_frame(dataset_features, action, prefix=ACTION)
+    observation_frame = build_dataset_frame(features, observation, prefix=OBS_STR)
+    action_frame = build_dataset_frame(features, action, prefix=ACTION)
     frame = {**observation_frame, **action_frame, "task": task}
-    if is_conditioned:
-        frame[FLOOR_CONDITION_KEY] = environment_state.copy()
     return frame
 
-
-def _validate_environment_state(features: dict[str, dict], environment_state: np.ndarray | None) -> bool:
-    is_conditioned = FLOOR_CONDITION_KEY in features
-    if is_conditioned:
-        schema = features[FLOOR_CONDITION_KEY]
-        if not isinstance(schema, dict) or any(
-            field not in schema or schema[field] != expected
-            for field, expected in FLOOR_CONDITION_FEATURE.items()
-        ):
-            raise ValueError(f"{FLOOR_CONDITION_KEY} schema must match FLOOR_CONDITION_FEATURE")
-        if environment_state is None:
-            raise ValueError("environment_state is required by the conditioned dataset schema")
-        if not isinstance(environment_state, np.ndarray):
-            raise ValueError("environment_state must be a numpy array")
-        if environment_state.dtype != np.dtype(np.float32):
-            raise ValueError("environment_state must have dtype float32")
-        if environment_state.shape != (5,):
-            raise ValueError("environment_state must have shape (5,)")
-        if not np.isfinite(environment_state).all():
-            raise ValueError("environment_state must contain only finite values")
-        if not np.isin(environment_state, (0.0, 1.0)).all() or environment_state.sum() != 1.0:
-            raise ValueError("environment_state must be an exact one-hot vector")
-    elif environment_state is not None:
-        raise ValueError("environment_state requires a conditioned dataset schema")
-    return is_conditioned
 
 
 def create_lerobot_dataset(
@@ -176,7 +141,6 @@ def create_lerobot_dataset(
     streaming_encoding: bool = False,
     encoder_queue_maxsize: int = 30,
     encoder_threads: int | None = None,
-    include_environment_state: bool = False,
 ):
     """Create a LeRobotDataset for Franka recording without importing it at module load time."""
 
@@ -189,7 +153,6 @@ def create_lerobot_dataset(
         robot,
         teleop,
         use_videos=use_videos,
-        include_environment_state=include_environment_state,
     )
     num_cameras = sum(1 for value in robot.observation_features.values() if isinstance(value, tuple))
     dataset = LeRobotDataset.create(
@@ -260,7 +223,6 @@ def record_lerobot_episode(
     max_consecutive_state_misses: int = 60,
     max_state_wait_s: float = 1.0,
     state_retry_sleep_s: float = 0.01,
-    environment_state: np.ndarray | None = None,
     tolerate_robot_faults: bool = False,
 ) -> int:
     """Record one episode into an already-created LeRobotDataset.
@@ -273,7 +235,6 @@ def record_lerobot_episode(
     DEBUG_TIMING = True   # 改为 False 可关闭每帧计时打印
 
     features = dataset.features
-    _validate_environment_state(features, environment_state)
     control_interval_s = 1.0 / float(fps)
     frames = 0
     consecutive_state_misses = 0
@@ -349,7 +310,6 @@ def record_lerobot_episode(
                 observation,
                 sent_action,
                 task=task,
-                environment_state=environment_state,
             )
         )
         t_add = time.perf_counter()

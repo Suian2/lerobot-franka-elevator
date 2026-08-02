@@ -11,16 +11,11 @@ import pytest
 
 import hardware_test.franka.franka_spacemouse_teleop as franka_spacemouse_teleop
 import hardware_test.franka.run_record as run_record
-import hardware_test.franka.run_record_lerobot as run_record_lerobot
 import hardware_test.franka.run_record_ui as run_record_ui
 import hardware_test.franka.run_remote_record as run_remote_record
 import lerobot.datasets as lerobot_datasets
 from hardware_test.franka.defaults import DEFAULT_CONTROL_HOST
-from hardware_test.franka.floor_condition import (
-    FLOOR_CONDITION_FEATURE,
-    FLOOR_CONDITION_KEY,
-    encode_target_floor,
-)
+
 from hardware_test.franka.franka_robot import FrankaControlError, FrankaRobot, FrankaRobotConfig
 from hardware_test.franka.franka_spacemouse_teleop import (
     SPNAV_EVENT_MOTION,
@@ -552,147 +547,6 @@ def test_lerobot_recording_helpers_build_features_and_frame_for_direct_dataset_w
     np.testing.assert_array_equal(frame["observation.images.l515"], obs["l515"])
 
 
-def test_build_lerobot_features_adds_conditioned_environment_state_without_expanding_proprioception():
-    robot = FrankaRobot(
-        FrankaRobotConfig(validate_connection=False, state_cache_enabled=False),
-        client=FakeFrankaClient(),
-    )
-    teleop = FrankaSpaceMouseTeleop(FrankaSpaceMouseTeleopConfig(), reader=FakeSpaceMouseReader([]))
-
-    features = build_lerobot_features(
-        robot,
-        teleop,
-        use_videos=False,
-        include_environment_state=True,
-    )
-
-    assert features[FLOOR_CONDITION_KEY] == FLOOR_CONDITION_FEATURE
-    assert features[FLOOR_CONDITION_KEY] is not FLOOR_CONDITION_FEATURE
-    assert features["observation.state"]["shape"] == (8,)
-
-
-def test_make_lerobot_frame_copies_environment_state_without_appending_to_proprioception():
-    robot = FrankaRobot(
-        FrankaRobotConfig(validate_connection=False, state_cache_enabled=False),
-        client=FakeFrankaClient(),
-    )
-    teleop = FrankaSpaceMouseTeleop(FrankaSpaceMouseTeleopConfig(), reader=FakeSpaceMouseReader([]))
-    features = build_lerobot_features(
-        robot,
-        teleop,
-        use_videos=False,
-        include_environment_state=True,
-    )
-    observation = {
-        **{f"joint_{idx}.pos": float(idx) for idx in range(1, 8)},
-        "gripper_width_norm": 0.5,
-    }
-    action = dict.fromkeys(DELTA_EE_ACTION_KEYS, 0.0)
-    action["gripper_cmd_bin"] = 1.0
-    environment_state = encode_target_floor(4)
-
-    frame = make_lerobot_frame(
-        features,
-        observation,
-        action,
-        task="pick",
-        environment_state=environment_state,
-    )
-
-    assert frame["observation.state"].shape == (8,)
-    assert frame[FLOOR_CONDITION_KEY].shape == (5,)
-    assert frame[FLOOR_CONDITION_KEY].dtype == np.float32
-    assert frame[FLOOR_CONDITION_KEY] is not environment_state
-    environment_state[:] = 0.0
-    np.testing.assert_array_equal(frame[FLOOR_CONDITION_KEY], encode_target_floor(4))
-
-
-@pytest.mark.parametrize(
-    "environment_state",
-    [
-        None,
-        np.asarray([0, 0, 0, 1, 0], dtype=np.float64),
-        np.asarray([[0, 0, 0, 1, 0]], dtype=np.float32),
-        np.asarray([0, 0, 0, 1, np.nan], dtype=np.float32),
-        np.asarray([0, 0, 0, 0.5, 0.5], dtype=np.float32),
-        np.asarray([0, 0, 0, 1, 1], dtype=np.float32),
-    ],
-    ids=("missing", "wrong-dtype", "wrong-shape", "non-finite", "non-binary", "not-one-hot"),
-)
-def test_make_lerobot_frame_rejects_bad_conditioned_environment_state(environment_state):
-    robot = FrankaRobot(
-        FrankaRobotConfig(validate_connection=False, state_cache_enabled=False),
-        client=FakeFrankaClient(),
-    )
-    teleop = FrankaSpaceMouseTeleop(FrankaSpaceMouseTeleopConfig(), reader=FakeSpaceMouseReader([]))
-    features = build_lerobot_features(
-        robot,
-        teleop,
-        use_videos=False,
-        include_environment_state=True,
-    )
-    observation = {
-        **{f"joint_{idx}.pos": float(idx) for idx in range(1, 8)},
-        "gripper_width_norm": 0.5,
-    }
-    action = dict.fromkeys(DELTA_EE_ACTION_KEYS, 0.0)
-    action["gripper_cmd_bin"] = 1.0
-
-    with pytest.raises(ValueError, match="environment_state"):
-        make_lerobot_frame(
-            features,
-            observation,
-            action,
-            task="pick",
-            environment_state=environment_state,
-        )
-
-
-def test_make_lerobot_frame_rejects_environment_state_for_unconditioned_schema():
-    robot = FrankaRobot(
-        FrankaRobotConfig(validate_connection=False, state_cache_enabled=False),
-        client=FakeFrankaClient(),
-    )
-    teleop = FrankaSpaceMouseTeleop(FrankaSpaceMouseTeleopConfig(), reader=FakeSpaceMouseReader([]))
-    features = build_lerobot_features(robot, teleop, use_videos=False)
-    observation = {
-        **{f"joint_{idx}.pos": float(idx) for idx in range(1, 8)},
-        "gripper_width_norm": 0.5,
-    }
-    action = dict.fromkeys(DELTA_EE_ACTION_KEYS, 0.0)
-    action["gripper_cmd_bin"] = 1.0
-
-    with pytest.raises(ValueError, match="environment_state"):
-        make_lerobot_frame(
-            features,
-            observation,
-            action,
-            task="pick",
-            environment_state=encode_target_floor(4),
-        )
-
-
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
-        ("dtype", "float64"),
-        ("shape", (4,)),
-        ("names", ["floor_1", "floor_2", "floor_3", "floor_4", "floor_5"]),
-    ],
-)
-def test_make_lerobot_frame_rejects_noncanonical_environment_state_schema(field, value):
-    schema = FLOOR_CONDITION_FEATURE.copy()
-    schema[field] = value
-
-    with pytest.raises(ValueError, match="environment_state schema"):
-        make_lerobot_frame(
-            {FLOOR_CONDITION_KEY: schema},
-            {},
-            {},
-            task="pick",
-            environment_state=encode_target_floor(4),
-        )
-
 
 def test_create_lerobot_dataset_discards_empty_initialized_root(tmp_path, monkeypatch):
     root = tmp_path / "franka_l515_smoke"
@@ -855,7 +709,7 @@ def test_record_lerobot_episode_waits_through_longer_state_cache_stale_burst():
     assert len(robot.sent_actions) == 1
 
 
-def test_conditioned_recording_keeps_episode_after_robot_action_fault(capsys):
+def test_recording_keeps_episode_after_robot_action_fault(capsys):
     stop_event = Event()
 
     class FaultingRobot(FakeRemoteRobot):
@@ -885,7 +739,6 @@ def test_conditioned_recording_keeps_episode_after_robot_action_fault(capsys):
         robot,
         teleop,
         use_videos=False,
-        include_environment_state=True,
     )
     dataset = FakeRemoteDataset(features)
 
@@ -897,7 +750,6 @@ def test_conditioned_recording_keeps_episode_after_robot_action_fault(capsys):
         duration_s=1.0,
         task="pick",
         stop_event=stop_event,
-        environment_state=encode_target_floor(4),
         tolerate_robot_faults=True,
     )
 
@@ -905,12 +757,10 @@ def test_conditioned_recording_keeps_episode_after_robot_action_fault(capsys):
     assert robot.send_attempts == 2
     np.testing.assert_array_equal(dataset.frames[0]["action"], np.array([0.1], dtype=np.float32))
     np.testing.assert_array_equal(dataset.frames[1]["action"], np.zeros(1, dtype=np.float32))
-    for frame in dataset.frames:
-        np.testing.assert_array_equal(frame[FLOOR_CONDITION_KEY], encode_target_floor(4))
     assert "robot fault" in capsys.readouterr().out.lower()
 
 
-def test_conditioned_recording_waits_until_episode_end_after_persistent_stale_state(capsys):
+def test_recording_waits_until_episode_end_after_persistent_stale_state(capsys):
     class FreshThenStaleRobot(FakeRemoteRobot):
         def get_observation(self):
             self.get_observation_calls += 1
@@ -924,7 +774,6 @@ def test_conditioned_recording_waits_until_episode_end_after_persistent_stale_st
         robot,
         teleop,
         use_videos=False,
-        include_environment_state=True,
     )
     dataset = FakeRemoteDataset(features)
 
@@ -938,7 +787,6 @@ def test_conditioned_recording_waits_until_episode_end_after_persistent_stale_st
         task="pick",
         max_consecutive_state_misses=1,
         state_retry_sleep_s=0.001,
-        environment_state=encode_target_floor(5),
         tolerate_robot_faults=True,
     )
     elapsed_s = time.perf_counter() - started_t
@@ -963,7 +811,6 @@ def test_robot_fault_tolerance_does_not_hide_dataset_write_errors():
         robot,
         teleop,
         use_videos=False,
-        include_environment_state=True,
     )
     dataset = WriteFailingDataset(features)
 
@@ -976,7 +823,6 @@ def test_robot_fault_tolerance_does_not_hide_dataset_write_errors():
             duration_s=1 / 30,
             task="pick",
             stop_event=stop_event,
-            environment_state=encode_target_floor(4),
             tolerate_robot_faults=True,
         )
 
@@ -993,7 +839,6 @@ def test_robot_fault_tolerance_does_not_hide_invalid_action_errors():
             robot,
             teleop,
             use_videos=False,
-            include_environment_state=True,
         )
     )
 
@@ -1005,7 +850,6 @@ def test_robot_fault_tolerance_does_not_hide_invalid_action_errors():
             fps=30,
             duration_s=1 / 30,
             task="pick",
-            environment_state=encode_target_floor(4),
             tolerate_robot_faults=True,
         )
 
@@ -1022,7 +866,6 @@ def test_robot_fault_tolerance_does_not_hide_unclassified_runtime_errors():
             robot,
             teleop,
             use_videos=False,
-            include_environment_state=True,
         )
     )
 
@@ -1034,7 +877,6 @@ def test_robot_fault_tolerance_does_not_hide_unclassified_runtime_errors():
             fps=30,
             duration_s=1 / 30,
             task="pick",
-            environment_state=encode_target_floor(4),
             tolerate_robot_faults=True,
         )
 
@@ -1053,7 +895,6 @@ def test_robot_fault_tolerance_does_not_hide_invalid_control_url():
             robot,
             teleop,
             use_videos=False,
-            include_environment_state=True,
         )
     )
 
@@ -1065,7 +906,6 @@ def test_robot_fault_tolerance_does_not_hide_invalid_control_url():
             fps=30,
             duration_s=1 / 30,
             task="pick",
-            environment_state=encode_target_floor(4),
             tolerate_robot_faults=True,
         )
 
@@ -1090,68 +930,6 @@ def test_legacy_recording_still_fails_fast_on_explicit_franka_fault():
         )
 
 
-def test_record_lerobot_episode_writes_target_floor_environment_state_on_every_frame():
-    stop_event = Event()
-
-    class StopAfterThreeFramesRobot(FakeRemoteRobot):
-        def get_observation(self):
-            observation = super().get_observation()
-            if self.get_observation_calls == 3:
-                stop_event.set()
-            return observation
-
-    robot = StopAfterThreeFramesRobot(failures_before_observation=0)
-    teleop = FakeRemoteTeleop()
-    features = build_lerobot_features(
-        robot,
-        teleop,
-        use_videos=False,
-        include_environment_state=True,
-    )
-    dataset = FakeRemoteDataset(features)
-    environment_state = encode_target_floor(5)
-
-    frames = record_lerobot_episode(
-        robot=robot,
-        teleop=teleop,
-        dataset=dataset,
-        fps=1000,
-        duration_s=1.0,
-        task="pick",
-        stop_event=stop_event,
-        environment_state=environment_state,
-    )
-
-    assert frames == 3
-    assert len(dataset.frames) == 3
-    for frame in dataset.frames:
-        np.testing.assert_array_equal(frame[FLOOR_CONDITION_KEY], encode_target_floor(5))
-        assert frame[FLOOR_CONDITION_KEY] is not environment_state
-        assert frame["observation.state"].shape == (1,)
-
-
-def test_record_lerobot_episode_preflights_environment_state_before_robot_action():
-    robot = FakeRemoteRobot(failures_before_observation=0)
-    teleop = FakeRemoteTeleop()
-    schema = FLOOR_CONDITION_FEATURE.copy()
-    schema["shape"] = (4,)
-    dataset = FakeRemoteDataset({FLOOR_CONDITION_KEY: schema})
-
-    with pytest.raises(ValueError, match="environment_state schema"):
-        record_lerobot_episode(
-            robot=robot,
-            teleop=teleop,
-            dataset=dataset,
-            fps=30,
-            duration_s=1 / 30,
-            task="pick",
-            environment_state=encode_target_floor(4),
-        )
-
-    assert robot.get_observation_calls == 0
-    assert robot.sent_actions == []
-
-
 def test_run_record_dry_run_builds_config_without_touching_hardware():
     exit_code = run_record_main(
         [
@@ -1166,165 +944,6 @@ def test_run_record_dry_run_builds_config_without_touching_hardware():
     )
 
     assert exit_code == 0
-
-
-def test_conditioned_record_parser_requires_target_floor_and_accepts_floors_one_through_five():
-    parser = build_arg_parser(require_target_floor=True)
-
-    with pytest.raises(SystemExit):
-        parser.parse_args([])
-    with pytest.raises(SystemExit):
-        run_record_lerobot.main(["--camera-backend", "none", "--dry-run-config"])
-
-    assert [parser.parse_args(["--target-floor", str(floor)]).target_floor for floor in range(1, 6)] == [
-        1,
-        2,
-        3,
-        4,
-        5,
-    ]
-
-    for invalid_floor in (0, 6):
-        with pytest.raises(SystemExit):
-            parser.parse_args(["--target-floor", str(invalid_floor)])
-
-
-def test_conditioned_record_target_floor_dry_run_does_not_touch_hardware(monkeypatch, capsys):
-    def fail_hardware_access(*args, **kwargs):
-        raise AssertionError("dry-run config must not construct hardware")
-
-    monkeypatch.setattr(run_record, "FrankaRobot", fail_hardware_access)
-    monkeypatch.setattr(run_record, "FrankaSpaceMouseTeleop", fail_hardware_access)
-
-    exit_code = run_record_lerobot.main(
-        [
-            "--target-floor",
-            "4",
-            "--repo-id",
-            "local/test",
-            "--root",
-            "/tmp/franka-conditioned-test",
-            "--camera-backend",
-            "none",
-            "--dry-run-config",
-        ]
-    )
-
-    assert exit_code == 0
-    assert "target_floor=4" in capsys.readouterr().out
-
-
-def test_conditioned_main_reuses_one_dataset_and_encodes_target_floor_once_per_episode(monkeypatch):
-    robot = SimpleNamespace(connect=lambda: None, disconnect=lambda: None)
-    teleop = SimpleNamespace(connect=lambda: None, disconnect=lambda: None)
-
-    class FakeMainDataset:
-        def __init__(self):
-            self.saved_episodes = 0
-            self.finalize_calls = 0
-
-        def save_episode(self):
-            self.saved_episodes += 1
-
-        def finalize(self):
-            self.finalize_calls += 1
-
-    created_datasets = []
-    record_calls = []
-    encode_calls = []
-
-    def create_dataset(**kwargs):
-        assert kwargs["include_environment_state"] is True
-        dataset = FakeMainDataset()
-        created_datasets.append(dataset)
-        return dataset
-
-    def record_episode(**kwargs):
-        record_calls.append(kwargs)
-        return 1
-
-    def encode_floor(floor):
-        encode_calls.append(floor)
-        return encode_target_floor(floor)
-
-    monkeypatch.setattr(run_record, "FrankaRobot", lambda config, cameras: robot)
-    monkeypatch.setattr(run_record, "FrankaSpaceMouseTeleop", lambda config: teleop)
-    monkeypatch.setattr(run_record, "create_lerobot_dataset", create_dataset)
-    monkeypatch.setattr(run_record, "record_lerobot_episode", record_episode)
-    monkeypatch.setattr(run_record, "encode_target_floor", encode_floor)
-    monkeypatch.setattr(run_record, "install_signal_handlers", lambda stop_event: None)
-
-    exit_code = run_record.main(
-        [
-            "--target-floor",
-            "4",
-            "--num-episodes",
-            "3",
-            "--camera-backend",
-            "none",
-            "--repo-id",
-            "local/test",
-            "--root",
-            "/tmp/franka-conditioned-main-test",
-        ],
-        require_target_floor=True,
-    )
-
-    assert exit_code == 0
-    assert len(created_datasets) == 1
-    assert created_datasets[0].saved_episodes == 3
-    assert created_datasets[0].finalize_calls == 1
-    assert encode_calls == [4, 4, 4]
-    assert len(record_calls) == 3
-    assert all(call["dataset"] is created_datasets[0] for call in record_calls)
-    assert all(call["tolerate_robot_faults"] is True for call in record_calls)
-    environment_states = [call["environment_state"] for call in record_calls]
-    assert len({id(environment_state) for environment_state in environment_states}) == 3
-    for environment_state in environment_states:
-        np.testing.assert_array_equal(environment_state, encode_target_floor(4))
-
-
-def test_conditioned_joint_recording_keeps_fail_fast_action_behavior(monkeypatch):
-    robot = SimpleNamespace(connect=lambda: None, disconnect=lambda: None)
-    teleop = SimpleNamespace(connect=lambda: None, disconnect=lambda: None)
-
-    class FakeMainDataset:
-        def save_episode(self):
-            pass
-
-        def finalize(self):
-            pass
-
-    record_calls = []
-    monkeypatch.setattr(run_record, "FrankaRobot", lambda config, cameras: robot)
-    monkeypatch.setattr(run_record, "FrankaSpaceMouseTeleop", lambda config: teleop)
-    monkeypatch.setattr(run_record, "create_lerobot_dataset", lambda **kwargs: FakeMainDataset())
-    monkeypatch.setattr(
-        run_record,
-        "record_lerobot_episode",
-        lambda **kwargs: record_calls.append(kwargs) or 1,
-    )
-    monkeypatch.setattr(run_record, "install_signal_handlers", lambda stop_event: None)
-
-    exit_code = run_record.main(
-        [
-            "--target-floor",
-            "4",
-            "--action-mode",
-            "joint",
-            "--camera-backend",
-            "none",
-            "--repo-id",
-            "local/test-joint",
-            "--root",
-            "/tmp/franka-conditioned-joint-test",
-        ],
-        require_target_floor=True,
-    )
-
-    assert exit_code == 0
-    assert len(record_calls) == 1
-    assert record_calls[0]["tolerate_robot_faults"] is False
 
 
 def test_legacy_run_record_and_ui_parsers_do_not_advertise_target_floor():

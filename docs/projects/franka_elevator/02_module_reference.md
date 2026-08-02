@@ -652,23 +652,12 @@ episode录制完成后，由`run_record.py`调用`dataset.save_episode()`；
 
 以下模块保留在仓库，但不属于当前单按钮运行链：
 
-
-
-- `run_act_rollout_realsense.py`
-
-- `floor_condition.py`
-
-- `migrate_add_target_floor.py`
-
-- `validate_multifloor_dataset.py`
-
 - `run_record_ui.py`
 
 - `run_remote_record.py`
 
 - `handeye/`
 
-- `run_record_lerobot.py`：要求`target_floor`的多楼层采集包装入口
 - `run_teleop.py`：不保存数据的手动遥操作入口
 - `franka_recording_controller.py`：录制UI使用的后台控制器
 - `scripts/start_franka_record_ui.sh`：录制UI启动脚本
