@@ -654,8 +654,6 @@ episode录制完成后，由`run_record.py`调用`dataset.save_episode()`；
 
 - `run_record_ui.py`
 
-- `run_remote_record.py`
-
 - `handeye/`
 
 - `run_teleop.py`：不保存数据的手动遥操作入口

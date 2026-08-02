@@ -12,7 +12,6 @@ import pytest
 import hardware_test.franka.franka_spacemouse_teleop as franka_spacemouse_teleop
 import hardware_test.franka.run_record as run_record
 import hardware_test.franka.run_record_ui as run_record_ui
-import hardware_test.franka.run_remote_record as run_remote_record
 import lerobot.datasets as lerobot_datasets
 from hardware_test.franka.defaults import DEFAULT_CONTROL_HOST
 
@@ -586,85 +585,6 @@ def test_create_lerobot_dataset_discards_empty_initialized_root(tmp_path, monkey
     )
 
     assert dataset["root"] == str(root)
-
-
-def test_run_remote_record_defaults_to_requested_smoke_profile():
-    args = run_remote_record.build_arg_parser().parse_args([])
-
-    robot_config = run_remote_record.build_robot_config(args)
-
-    assert args.repo_id == "local/franka_l515_smoke"
-    assert args.root == "outputs/hardware_test/franka_l515_smoke"
-    assert args.task == "Franka SpaceMouse teleoperation"
-    assert args.duration_s == 10.0
-    assert args.num_episodes == 1
-    assert args.control_host == DEFAULT_CONTROL_HOST
-    assert args.streaming_encoding is True
-    assert args.encoder_threads == 2
-    assert args.max_state_age_s == 1.0
-    assert args.state_max_consecutive_misses == 5
-    assert robot_config.state_cache_enabled is False
-    assert robot_config.validate_connection is False
-    assert robot_config.max_state_age_s == 1.0
-
-
-def test_run_remote_record_preflight_retries_until_state_is_available():
-    client = FlakyStateClient(failures_before_success=2)
-
-    result = run_remote_record.preflight_state_client(
-        client,
-        retries=4,
-        timeout_s=0.5,
-        sleep_s=0.0,
-        gripper_state_optional=True,
-    )
-
-    assert result.ok is True
-    assert result.attempts == 3
-    assert client.timeouts_seen == [0.5, 0.5, 0.5]
-    assert result.snapshot is not None
-    assert result.snapshot.state["joint"] == client.state["joint"]
-    assert result.snapshot.gripper_state == {"width": client.state["gripper_width"]}
-
-
-def test_run_remote_record_treats_gripper_state_as_optional_during_preflight():
-    client = FlakyStateClient(gripper_fails=True)
-
-    result = run_remote_record.preflight_state_client(
-        client,
-        retries=1,
-        timeout_s=0.5,
-        sleep_s=0.0,
-        gripper_state_optional=True,
-    )
-
-    assert result.ok is True
-    assert result.snapshot is not None
-    assert result.snapshot.gripper_state == {}
-    assert isinstance(result.gripper_error, TimeoutError)
-
-
-def test_run_remote_record_retries_stale_state_before_recording_frame():
-    robot = FakeRemoteRobot(failures_before_observation=2)
-    teleop = FakeRemoteTeleop()
-    features = build_lerobot_features(robot, teleop, use_videos=False)
-    dataset = FakeRemoteDataset(features)
-
-    frames = run_remote_record.record_remote_episode(
-        robot=robot,
-        teleop=teleop,
-        dataset=dataset,
-        fps=30,
-        duration_s=1 / 30,
-        task="pick",
-        max_consecutive_state_misses=3,
-        state_retry_sleep_s=0.0,
-    )
-
-    assert frames == 1
-    assert robot.get_observation_calls == 3
-    assert len(dataset.frames) == 1
-    assert dataset.frames[0]["task"] == "pick"
 
 
 def test_record_lerobot_episode_retries_transient_stale_state_without_sending_action():

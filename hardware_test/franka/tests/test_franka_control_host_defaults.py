@@ -10,7 +10,6 @@ from hardware_test.franka import (
     recover_fault,
     run_record,
     run_record_ui,
-    run_remote_record,
     run_teleop,
 )
 from hardware_test.franka.defaults import CONTROL_HOST_ENV_VAR, DEFAULT_CONTROL_HOST
@@ -26,7 +25,6 @@ def _parser_cases() -> tuple[ParserCase, ...]:
         (recover_fault.build_arg_parser, []),
         (run_record.build_arg_parser, []),
         (run_record_ui.build_ui_arg_parser, []),
-        (run_remote_record.build_arg_parser, []),
         (run_teleop.build_arg_parser, []),
         (collect_eye_to_hand.build_arg_parser, []),
     )
